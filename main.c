@@ -1,5 +1,6 @@
 #include <avr/io.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <avr/interrupt.h>
 #include "usart_1284.h"
 #include "timer.h"
@@ -8,6 +9,11 @@
 #include "task.h"
 #include "levels.h"
 #include "io.c"
+
+// LEVEL & FLAG
+
+unsigned char LEV = 0;
+unsigned char FLAG = 1;
 
 // JOYSTICK SAMPLING
 
@@ -26,28 +32,32 @@ unsigned short ud = 0;							unsigned short highThresh = 0x0300;
 */
 
 int ReadJoystick(int state) {
-	if (!currRead) {
-		lr = readLR();
-		
-		if (lr < lowThresh) {
-			nextDirection = LEFT;
-		} else if (lr > highThresh) {
-			nextDirection = RIGHT;
-		}
-
-		currRead = 1;
+	if (FLAG) {
+		nextDirection = LEFT;
 	} else {
-		ud = readUD();
+		if (!currRead) {
+			lr = readLR();
 		
-		if (ud < lowThresh) {
-			nextDirection = UP;
-		} else if (ud > highThresh) {
-			nextDirection = DOWN;
-		}
+			if (lr < lowThresh) {
+				nextDirection = LEFT;
+			} else if (lr > highThresh) {
+				nextDirection = RIGHT;
+			}
 
-		currRead = 0;
+			currRead = 1;
+		} else {
+			ud = readUD();
+		
+			if (ud < lowThresh) {
+				nextDirection = UP;
+			} else if (ud > highThresh) {
+				nextDirection = DOWN;
+			}
+
+			currRead = 0;
+		}
 	}
-	
+
 	return state;
 }
 
@@ -74,167 +84,182 @@ unsigned char pacSignal = 0x00;
 	- prompted to go in opposite direction, IMMEDIATELY turns backwards
 */
 
+unsigned char LEVELSCOPY[32][32];
+
 int PacMove(int state) {
-	switch (state) {
-		case goLeft:
-			if (nextDirection == RIGHT) {
-				state = pacWait; break;
+	if (FLAG) {
+		xTL = 24; yTL = 15; xTR = 24; yTR = 16;
+		xBL = 25; yBL = 15; xBR = 25; yBR = 16;
+		
+		for (unsigned char i = 0; i < 32; ++i) {
+			for (unsigned char j = 0; j < 32; ++j) {
+				LEVELSCOPY[i][j] = LEVELS[LEV][i][j];
 			}
+		}
+		
+		pacSignal = 0x00;
+	} else {
+		switch (state) {
+			case goLeft:
+				if (nextDirection == RIGHT) {
+					state = pacWait; break;
+				}
 
-			if ((level1[xTL - 1][yTL] != 1) && (level1[xTR - 1][yTR] != 1) && (nextDirection == UP)) {
-				state = pacWait; break;
-			}
+				if ((LEVELSCOPY[xTL - 1][yTL] != 1) && (LEVELSCOPY[xTR - 1][yTR] != 1) && (nextDirection == UP)) {
+					state = pacWait; break;
+				}
 
-			if ((level1[xBL + 1][yBL] != 1) && (level1[xBR + 1][yBR] != 1) && (nextDirection == DOWN)) {
-				state = pacWait; break;
-			}
+				if ((LEVELSCOPY[xBL + 1][yBL] != 1) && (LEVELSCOPY[xBR + 1][yBR] != 1) && (nextDirection == DOWN)) {
+					state = pacWait; break;
+				}
 
-			if (pacSignal == 0x01) {
+				if (pacSignal == 0x01) {
 				
-				state = goLeft;
-				break;
-			}
+					state = goLeft;
+					break;
+				}
 			
-			state = pacWait; break;
-		case goRight:
-			if (nextDirection == LEFT) {
 				state = pacWait; break;
-			}
+			case goRight:
+				if (nextDirection == LEFT) {
+					state = pacWait; break;
+				}
 
-			if ((level1[xTL - 1][yTL] != 1) && (level1[xTR - 1][yTR] != 1) && (nextDirection == UP)) {
-				state = pacWait; break;
-			}
+				if ((LEVELSCOPY[xTL - 1][yTL] != 1) && (LEVELSCOPY[xTR - 1][yTR] != 1) && (nextDirection == UP)) {
+					state = pacWait; break;
+				}
 
-			if ((level1[xBL + 1][yBL] != 1) && (level1[xBR + 1][yBR] != 1) && (nextDirection == DOWN)) {
-				state = pacWait; break;
-			}
+				if ((LEVELSCOPY[xBL + 1][yBL] != 1) && (LEVELSCOPY[xBR + 1][yBR] != 1) && (nextDirection == DOWN)) {
+					state = pacWait; break;
+				}
 			
-			if (pacSignal == 0x02) {
+				if (pacSignal == 0x02) {
 				
-				state = goRight;
-				break;
-			}
+					state = goRight;
+					break;
+				}
 			
-			state = pacWait; break;
-		case goUp:
-			if (nextDirection == DOWN) {
 				state = pacWait; break;
-			}
+			case goUp:
+				if (nextDirection == DOWN) {
+					state = pacWait; break;
+				}
 
-			if ((level1[xTL][yTL - 1] != 1) && (level1[xBL][yBL - 1] != 1) && (nextDirection == LEFT)) {
-				state = pacWait; break;
-			}
+				if ((LEVELSCOPY[xTL][yTL - 1] != 1) && (LEVELSCOPY[xBL][yBL - 1] != 1) && (nextDirection == LEFT)) {
+					state = pacWait; break;
+				}
 
-			if ((level1[xTR][yTR + 1] != 1) && (level1[xBR][yBR + 1] != 1) && (nextDirection == RIGHT)) {
-				state = pacWait; break;
-			}
+				if ((LEVELSCOPY[xTR][yTR + 1] != 1) && (LEVELSCOPY[xBR][yBR + 1] != 1) && (nextDirection == RIGHT)) {
+					state = pacWait; break;
+				}
 
-			if (pacSignal == 0x03) {
+				if (pacSignal == 0x03) {
 				
-				state = goUp;
-				break;
-			}
+					state = goUp;
+					break;
+				}
 			
-			state = pacWait; break;
-		case goDown:
-			if (nextDirection == UP) {
 				state = pacWait; break;
-			}
+			case goDown:
+				if (nextDirection == UP) {
+					state = pacWait; break;
+				}
 
-			if ((level1[xTL][yTL - 1] != 1) && (level1[xBL][yBL - 1] != 1) && (nextDirection == LEFT)) {
-				state = pacWait; break;
-			}
+				if ((LEVELSCOPY[xTL][yTL - 1] != 1) && (LEVELSCOPY[xBL][yBL - 1] != 1) && (nextDirection == LEFT)) {
+					state = pacWait; break;
+				}
 
-			if ((level1[xTR][yTR + 1] != 1) && (level1[xBR][yBR + 1] != 1) && (nextDirection == RIGHT)) {
-				state = pacWait; break;
-			}
+				if ((LEVELSCOPY[xTR][yTR + 1] != 1) && (LEVELSCOPY[xBR][yBR + 1] != 1) && (nextDirection == RIGHT)) {
+					state = pacWait; break;
+				}
 
-			if (pacSignal == 0x04) {
+				if (pacSignal == 0x04) {
 				
-				state = goDown;
+					state = goDown;
+					break;
+				}
+
+				state = pacWait; break;
+			case pacWait:
+				if (nextDirection == LEFT) {
+					state = goLeft; break;
+				} else if (nextDirection == RIGHT) {
+					state = goRight; break;
+				} else if (nextDirection == UP) {
+					state = goUp; break;
+				} else if (nextDirection == DOWN) {
+					state = goDown; break;
+				}
+			default:
+				state = pacWait; break;
+		}
+
+		switch (state) {
+			case pacWait:
+				pacSignal = 0x00; break;
+			case goLeft:
+				// if infinite, move to other side of board
+				if ( (yTL <= 0) && (yBL <= 0) ) {
+					yTL = 30; yTR = 31;
+					yBL = 30; yBR = 31;
+					pacSignal = 0x01; break;
+				}
+				// otherwise not infinite, move left unless wall
+				if ( (LEVELSCOPY[xTL][yTL - 1] != 1) && (LEVELSCOPY[xBL][yBL - 1] != 1) ) {
+					yTL--; yTR--;
+					yBL--; yBR--;
+					pacSignal = 0x01; break;
+				}
+
+				if ( (LEVELSCOPY[xTL][yTL - 1] == 1) || (LEVELSCOPY[xBL][yBL - 1] == 1) ) {
+					pacSignal = 0x00; break;
+				}
 				break;
-			}
-
-			state = pacWait; break;
-		case pacWait:
-			if (nextDirection == LEFT) {
-				state = goLeft; break;
-			} else if (nextDirection == RIGHT) {
-				state = goRight; break;
-			} else if (nextDirection == UP) {
-				state = goUp; break;
-			} else if (nextDirection == DOWN) {
-				state = goDown; break;
-			}
-		default:
-			state = pacWait; break;
-	}
-
-	switch (state) {
-		case pacWait:
-			pacSignal = 0x00; break;
-		case goLeft:
-			// if infinite, move to other side of board
-			if ( (yTL <= 0) && (yBL <= 0) ) {
-				yTL = 30; yTR = 31;
-				yBL = 30; yBR = 31;
-				pacSignal = 0x01; break;
-			}
-			// otherwise not infinite, move left unless wall
-			if ( (level1[xTL][yTL - 1] != 1) && (level1[xBL][yBL - 1] != 1) ) {
-				yTL--; yTR--;
-				yBL--; yBR--;
-				pacSignal = 0x01; break;
-			}
-
-			if ( (level1[xTL][yTL - 1] == 1) || (level1[xBL][yBL - 1] == 1) ) {
-				pacSignal = 0x00; break;
-			}
-			break;
-		case goRight:
-			// if infinite, move to other side of board
-			if ( (yTR >= 31) && (yBR >= 31) ) {
-				yTL = 0; yTR = 1;
-				yBL = 0; yBR = 1;
-				pacSignal = 0x02; break;
-			}
-			// otherwise not infinite, move right unless wall
-			if ( (level1[xTR][yTR + 1] != 1) && (level1[xBR][yBR + 1] != 1) ) {
-				yTL++; yTR++;
-				yBL++; yBR++;
-				pacSignal = 0x02; break;
-			}
+			case goRight:
+				// if infinite, move to other side of board
+				if ( (yTR >= 31) && (yBR >= 31) ) {
+					yTL = 0; yTR = 1;
+					yBL = 0; yBR = 1;
+					pacSignal = 0x02; break;
+				}
+				// otherwise not infinite, move right unless wall
+				if ( (LEVELSCOPY[xTR][yTR + 1] != 1) && (LEVELSCOPY[xBR][yBR + 1] != 1) ) {
+					yTL++; yTR++;
+					yBL++; yBR++;
+					pacSignal = 0x02; break;
+				}
 			
-			if ( (level1[xTR][yTR + 1] == 1) || (level1[xBR][yBR + 1] == 1) ) {
-				pacSignal = 0x00; break;
-			}
-			break;
-		case goUp:
-			// not infinite, move up unless wall
-			if ( (level1[xTL - 1][yTL] != 1) && (level1[xTR - 1][yTR] != 1) ) {
-				xTL--; xTR--;
-				xBL--; xBR--;
-				pacSignal = 0x03; break;
-			}
+				if ( (LEVELSCOPY[xTR][yTR + 1] == 1) || (LEVELSCOPY[xBR][yBR + 1] == 1) ) {
+					pacSignal = 0x00; break;
+				}
+				break;
+			case goUp:
+				// not infinite, move up unless wall
+				if ( (LEVELSCOPY[xTL - 1][yTL] != 1) && (LEVELSCOPY[xTR - 1][yTR] != 1) ) {
+					xTL--; xTR--;
+					xBL--; xBR--;
+					pacSignal = 0x03; break;
+				}
 			
-			if ( (level1[xTL - 1][yTL] == 1) || (level1[xTR - 1][yTR] == 1) ) {
-				pacSignal = 0x00; break;
-			}
-			break;
-		case goDown:
-			// not infinite, move down unless wall
-			if ( (level1[xBL + 1][yBL] != 1) && (level1[xBR + 1][yBR] != 1) ) {
-				xTL++; xTR++;
-				xBL++; xBR++;
-				pacSignal = 0x04; break;
-			}
+				if ( (LEVELSCOPY[xTL - 1][yTL] == 1) || (LEVELSCOPY[xTR - 1][yTR] == 1) ) {
+					pacSignal = 0x00; break;
+				}
+				break;
+			case goDown:
+				// not infinite, move down unless wall
+				if ( (LEVELSCOPY[xBL + 1][yBL] != 1) && (LEVELSCOPY[xBR + 1][yBR] != 1) ) {
+					xTL++; xTR++;
+					xBL++; xBR++;
+					pacSignal = 0x04; break;
+				}
 
-			if ( (level1[xBL + 1][yBL] == 1) || (level1[xBR + 1][yBR] == 1) ) {
-				pacSignal = 0x00; break;
-			}
-			break;
-		default:
-			break;
+				if ( (LEVELSCOPY[xBL + 1][yBL] == 1) || (LEVELSCOPY[xBR + 1][yBR] == 1) ) {
+					pacSignal = 0x00; break;
+				}
+				break;
+			default:
+				break;
+		}
 	}
 
 	return state;
@@ -243,46 +268,198 @@ int PacMove(int state) {
 // SCORE INCREMEMNTING
 
 unsigned short scoreCnt = 0;
+unsigned char resetScore = 1;
 
 int Score(int state) {
-	if (pacSignal == 0x01 && level1[xTL][yTL] == 2 && level1[xBL][yBL] == 2) {
-		scoreCnt++;
-		level1[xTL][yTL] = 0;
-		level1[xBL][yBL] = 0;
-	} else if (pacSignal == 0x02 && level1[xTR][yTR] == 2 && level1[xBR][yBR] == 2) {
-		scoreCnt++;
-		level1[xTR][yTR] = 0;
-		level1[xBR][yBR] = 0;
-	} else if (pacSignal == 0x03 && level1[xTL][yTL] == 2 && level1[xTR][yTR] == 2) {
-		scoreCnt++;
-		level1[xTL][yTL] = 0;
-		level1[xTR][yTR] = 0;
-	} else if (pacSignal == 0x04 && level1[xBL][yBL] == 2 && level1[xBR][yBR] == 2) {
-		scoreCnt++;
-		level1[xBL][yBL] = 0;
-		level1[xBR][yBR] = 0;
+	if (FLAG && resetScore) {
+		scoreCnt = 0;
+	} else {
+		if (pacSignal == 0x01 && LEVELSCOPY[xTL][yTL] == 2 && LEVELSCOPY[xBL][yBL] == 2) {
+			scoreCnt++;
+			LEVELSCOPY[xTL][yTL] = 0;
+			LEVELSCOPY[xBL][yBL] = 0;
+		} else if (pacSignal == 0x02 && LEVELSCOPY[xTR][yTR] == 2 && LEVELSCOPY[xBR][yBR] == 2) {
+			scoreCnt++;
+			LEVELSCOPY[xTR][yTR] = 0;
+			LEVELSCOPY[xBR][yBR] = 0;
+		} else if (pacSignal == 0x03 && LEVELSCOPY[xTL][yTL] == 2 && LEVELSCOPY[xTR][yTR] == 2) {
+			scoreCnt++;
+			LEVELSCOPY[xTL][yTL] = 0;
+			LEVELSCOPY[xTR][yTR] = 0;
+		} else if (pacSignal == 0x04 && LEVELSCOPY[xBL][yBL] == 2 && LEVELSCOPY[xBR][yBR] == 2) {
+			scoreCnt++;
+			LEVELSCOPY[xBL][yBL] = 0;
+			LEVELSCOPY[xBR][yBR] = 0;
+		}
 	}
-	
-	//PORTB = scoreCnt;
-
-	LCD_ClearScreen();
-	LCD_DisplayString(1, "Score: ");
-	LCD_Cursor(8);
-	LCD_WriteData(scoreCnt / 1000 + '0');
-	LCD_WriteData((scoreCnt % 1000) / 100 + '0');
-	LCD_WriteData((scoreCnt % 100) / 10 + '0');
-	LCD_WriteData(scoreCnt % 10 + '0');
 
 	return state;
 }
 
+enum GameStates {startScreen, startRelease, firstLevel, firstLoss, firstWin};
+
+unsigned char controlSignal = 0x07;
+unsigned char scoreDisplay[] = "Score: ";
+unsigned char countdown = 5;
+unsigned char i = 0;
+
+int Game(int state) {
+	unsigned char D5 = GetBit(~PIND, 5);
+
+	switch (state) {
+		case startScreen:
+			if (D5) {
+				state = startRelease;
+			} else {
+				state = startScreen;
+			}
+			
+			break;
+		case startRelease:
+			if (D5) {
+				state = startRelease;
+			} else {
+				i = 0x0F;
+				resetScore = 0;
+				state = firstLevel;
+				countdown = 5;
+			}
+			
+			break;
+		case firstLevel:
+			if (D5) {
+				i = 0x0F;
+				state = firstLoss;
+			} else if (!D5 && (scoreCnt < 0x00B8)) {
+				if (i > 0) i--;
+				state = firstLevel;
+			} else if (!D5 && (scoreCnt >= 0x00B8)) {
+				i = 0x0F;
+				state = firstWin;
+			}
+			
+			break;
+		case firstLoss:
+			if (D5 || i > 0) {
+				if (i > 0) i--;
+				state = firstLoss;
+			} else if (!D5 && i <= 0) {
+				resetScore = 1;
+				state = startScreen;
+			}
+			
+			break;
+		case firstWin:
+			if (D5 || i > 0) {
+				if (i > 0) i --;
+				state = firstWin;
+			} else if (!D5 && i <= 0) {
+				resetScore = 1;
+				state = startScreen;
+			}
+
+			break;
+		default:
+			state = startScreen; break;
+	}
+
+	// controlSignal		1 = LEVEL WIN		2 = LEVEL LOSE		3 = OVERALL WIN		4 = LEVEL ONE		5 = LEVEL TWO		6 = LEVEL THREE		7 = START SCREEN
+
+	switch (state) {
+		case startScreen:
+			controlSignal = 0x07; FLAG = 1;
+			
+			LCD_ClearScreen(); LCD_DisplayString(1, " < START / RESET");
+			
+			break;
+		case startRelease:
+			controlSignal = 0x07; FLAG = 1;
+
+			break;
+		case firstLevel:
+			controlSignal = 0x04;
+			if (i > 0) {
+				FLAG = 1;
+
+				LCD_ClearScreen();
+				LCD_DisplayString(1, "LEVEL 1 IN ");
+				if (i % 5 == 0) countdown--;
+				LCD_WriteData(countdown + '0');
+				LCD_Cursor(17);
+				for (unsigned char x = 0; x < 7; ++x) {
+					LCD_WriteData(scoreDisplay[x]);
+				}
+				LCD_WriteData(scoreCnt / 1000 + '0');
+				LCD_WriteData((scoreCnt % 1000) / 100 + '0');
+				LCD_WriteData((scoreCnt % 100) / 10 + '0');
+				LCD_WriteData(scoreCnt % 10 + '0');
+			} else {
+				FLAG = 0;
+				
+				LCD_ClearScreen();
+				LCD_DisplayString(1, "LEVEL 1");
+				LCD_Cursor(17);
+				for (unsigned char x = 0; x < 7; ++x) {
+					LCD_WriteData(scoreDisplay[x]);
+				}
+				LCD_WriteData(scoreCnt / 1000 + '0');
+				LCD_WriteData((scoreCnt % 1000) / 100 + '0');
+				LCD_WriteData((scoreCnt % 100) / 10 + '0');
+				LCD_WriteData(scoreCnt % 10 + '0');
+			}
+
+			break;
+		case firstLoss:
+			controlSignal = 0x02; FLAG = 1;
+
+			LCD_ClearScreen();
+			LCD_DisplayString(1, "LEVEL 1 FAILED");
+			LCD_Cursor(17);
+			for (unsigned char x = 0; x < 7; ++x) {
+				LCD_WriteData(scoreDisplay[x]);
+			}
+			LCD_WriteData(scoreCnt / 1000 + '0');
+			LCD_WriteData((scoreCnt % 1000) / 100 + '0');
+			LCD_WriteData((scoreCnt % 100) / 10 + '0');
+			LCD_WriteData(scoreCnt % 10 + '0');
+			
+			break;
+		case firstWin:
+			controlSignal = 0x01; FLAG = 1;
+
+			LCD_ClearScreen();
+			LCD_DisplayString(1, "LEVEL 1 COMPLETE");
+			LCD_Cursor(17);
+			for (unsigned char x = 0; x < 7; ++x) {
+				LCD_WriteData(scoreDisplay[x]);
+			}
+			LCD_WriteData(scoreCnt / 1000 + '0');
+			LCD_WriteData((scoreCnt % 1000) / 100 + '0');
+			LCD_WriteData((scoreCnt % 100) / 10 + '0');
+			LCD_WriteData(scoreCnt % 10 + '0');
+
+			break;
+		default:
+			break;
+	}
+
+	return state;
+}
+
+unsigned short SIGNAL = 0x00;
+
 int Tinker(int state) {
 	if (USART_IsSendReady(0)) {
-		if (pacSignal == 0x01) {USART_Send(0x01, 0); } //PORTB = 0x02;}
+		SIGNAL = ((controlSignal << 13) & 0xE000);
+		SIGNAL |= pacSignal;
+		/*if (pacSignal == 0x01) {USART_Send(0x01, 0); } //PORTB = 0x02;}
 		else if (pacSignal == 0x02) {USART_Send(0x02, 0); } //PORTB = 0x01;}
 		else if (pacSignal == 0x03) {USART_Send(0x03, 0); } //PORTB = 0x04;}
-		else if (pacSignal == 0x04) {USART_Send(0x04, 0); } //PORTB = 0x08;}
-		USART_Flush(0);
+		else if (pacSignal == 0x04) {USART_Send(0x04, 0); } //PORTB = 0x08;}*/
+		//USART_Send(SIGNAL >> 13, 0);
+		USART_Send((SIGNAL >> 8), 0);
+		USART_Send((SIGNAL & 0x00FF), 0);
+		//USART_Flush(0);
 	}
 	return state;
 }
@@ -293,9 +470,9 @@ int main() {
 	DDRD = 0xDF; PORTD = 0x20; // bit 5 as start/reset input
 							   // all else LCD
 	
-	static task joyTask, pacTask, scoreTask, tinkTask;
-	task *tasks[] = {&joyTask, &pacTask, &scoreTask, &tinkTask};
-	unsigned short numTasks = 4;
+	static task joyTask, pacTask, scoreTask, gameTask, tinkTask;
+	task *tasks[] = {&joyTask, &pacTask, &scoreTask, &gameTask, &tinkTask};
+	unsigned short numTasks = 5;
 	
 	joyTask.state = -1; // single state function
 	joyTask.period = 1; // constantly reading input
@@ -311,6 +488,11 @@ int main() {
 	scoreTask.period = 150; // must match timing of moves for correct calculations
 	scoreTask.elapsedTime = scoreTask.period;
 	scoreTask.TickFct = &Score;
+
+	gameTask.state = startScreen;
+	gameTask.period = 150;
+	gameTask.elapsedTime = gameTask.period;
+	gameTask.TickFct = &Game;
 	
 	tinkTask.state = -1; // sends moves via USART to display
 	tinkTask.period = 150; // must match timing of moves to synchronized display
