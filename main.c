@@ -1,6 +1,5 @@
 #include <avr/io.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <avr/interrupt.h>
 #include "usart_1284.h"
 #include "timer.h"
@@ -11,6 +10,16 @@
 #include "io.c"
 
 // LEVEL & FLAG
+
+unsigned char LEVELSCOPY[15][31];
+
+void setupArr(unsigned char c) {
+	for (unsigned char i = 0; i < 15; ++i) {
+		for (unsigned char j = 0; j < 31; ++j) {
+			LEVELSCOPY[i][j] = LEVELS[c][i][j];
+		}
+	}
+}
 
 unsigned char LEV = 0;
 unsigned char FLAG = 1;
@@ -62,41 +71,16 @@ int ReadJoystick(int state) {
 }
 
 // PACMAN POSITION AND ITERATION
-
 enum PacMoveStates {goLeft, pacWait, goRight, goUp, goDown};
 
 // hold pacman current position, defaulted to bottom center at start
-unsigned char xTL = 24; unsigned char yTL = 15; unsigned char xTR = 24; unsigned char yTR = 16;
-unsigned char xBL = 25; unsigned char yBL = 15; unsigned char xBR = 25; unsigned char yBR = 16;
+unsigned char x = 11; unsigned char y = 15;
 // LEFT = 1		RIGHT = 2		UP = 3		DOWN = 4
 unsigned char pacSignal = 0x00;
 
-/*
-- keeps going in current direction (starts at LEFT)
-- keeps going till either hits wall, reaches intersection, or prompted to go in opposite
-	direction
-	- if hits wall, waits at location until nextDirection changes to value that pacman can
-		actually move in
-	- if at intersection, goes back to wait state and checks to see if given a new
-		nextDirection
-		- if no, keeps moving in current direction
-		- if yes, moves in new direction
-	- prompted to go in opposite direction, IMMEDIATELY turns backwards
-*/
-
-unsigned char LEVELSCOPY[32][32];
-
 int PacMove(int state) {
 	if (FLAG) {
-		xTL = 24; yTL = 15; xTR = 24; yTR = 16;
-		xBL = 25; yBL = 15; xBR = 25; yBR = 16;
-		
-		for (unsigned char i = 0; i < 32; ++i) {
-			for (unsigned char j = 0; j < 32; ++j) {
-				LEVELSCOPY[i][j] = LEVELS[LEV][i][j];
-			}
-		}
-		
+		x = 11; y = 15;
 		pacSignal = 0x00;
 	} else {
 		switch (state) {
@@ -105,11 +89,11 @@ int PacMove(int state) {
 					state = pacWait; break;
 				}
 
-				if ((LEVELSCOPY[xTL - 1][yTL] != 1) && (LEVELSCOPY[xTR - 1][yTR] != 1) && (nextDirection == UP)) {
+				if ((LEVELSCOPY[x - 1][y] != 1) && (nextDirection == UP)) {
 					state = pacWait; break;
 				}
 
-				if ((LEVELSCOPY[xBL + 1][yBL] != 1) && (LEVELSCOPY[xBR + 1][yBR] != 1) && (nextDirection == DOWN)) {
+				if ((LEVELSCOPY[x + 1][y] != 1) && (nextDirection == DOWN)) {
 					state = pacWait; break;
 				}
 
@@ -125,11 +109,11 @@ int PacMove(int state) {
 					state = pacWait; break;
 				}
 
-				if ((LEVELSCOPY[xTL - 1][yTL] != 1) && (LEVELSCOPY[xTR - 1][yTR] != 1) && (nextDirection == UP)) {
+				if ((LEVELSCOPY[x - 1][y] != 1) && (nextDirection == UP)) {
 					state = pacWait; break;
 				}
 
-				if ((LEVELSCOPY[xBL + 1][yBL] != 1) && (LEVELSCOPY[xBR + 1][yBR] != 1) && (nextDirection == DOWN)) {
+				if ((LEVELSCOPY[x + 1][y] != 1) && (nextDirection == DOWN)) {
 					state = pacWait; break;
 				}
 			
@@ -145,11 +129,11 @@ int PacMove(int state) {
 					state = pacWait; break;
 				}
 
-				if ((LEVELSCOPY[xTL][yTL - 1] != 1) && (LEVELSCOPY[xBL][yBL - 1] != 1) && (nextDirection == LEFT)) {
+				if ((LEVELSCOPY[x][y - 1] != 1) && (nextDirection == LEFT)) {
 					state = pacWait; break;
 				}
 
-				if ((LEVELSCOPY[xTR][yTR + 1] != 1) && (LEVELSCOPY[xBR][yBR + 1] != 1) && (nextDirection == RIGHT)) {
+				if ((LEVELSCOPY[x][y + 1] != 1) && (nextDirection == RIGHT)) {
 					state = pacWait; break;
 				}
 
@@ -165,11 +149,11 @@ int PacMove(int state) {
 					state = pacWait; break;
 				}
 
-				if ((LEVELSCOPY[xTL][yTL - 1] != 1) && (LEVELSCOPY[xBL][yBL - 1] != 1) && (nextDirection == LEFT)) {
+				if ((LEVELSCOPY[x][y - 1] != 1) && (nextDirection == LEFT)) {
 					state = pacWait; break;
 				}
 
-				if ((LEVELSCOPY[xTR][yTR + 1] != 1) && (LEVELSCOPY[xBR][yBR + 1] != 1) && (nextDirection == RIGHT)) {
+				if ((LEVELSCOPY[x][y + 1] != 1) && (nextDirection == RIGHT)) {
 					state = pacWait; break;
 				}
 
@@ -199,61 +183,55 @@ int PacMove(int state) {
 				pacSignal = 0x00; break;
 			case goLeft:
 				// if infinite, move to other side of board
-				if ( (yTL <= 0) && (yBL <= 0) ) {
-					yTL = 30; yTR = 31;
-					yBL = 30; yBR = 31;
+				if (y <= 0) {
+					y = 30;
 					pacSignal = 0x01; break;
 				}
 				// otherwise not infinite, move left unless wall
-				if ( (LEVELSCOPY[xTL][yTL - 1] != 1) && (LEVELSCOPY[xBL][yBL - 1] != 1) ) {
-					yTL--; yTR--;
-					yBL--; yBR--;
+				if ( (LEVELSCOPY[x][y - 1] != 1) ) {
+					y--;
 					pacSignal = 0x01; break;
 				}
 
-				if ( (LEVELSCOPY[xTL][yTL - 1] == 1) || (LEVELSCOPY[xBL][yBL - 1] == 1) ) {
+				if ( (LEVELSCOPY[x][y - 1] == 1) ) {
 					pacSignal = 0x00; break;
 				}
 				break;
 			case goRight:
 				// if infinite, move to other side of board
-				if ( (yTR >= 31) && (yBR >= 31) ) {
-					yTL = 0; yTR = 1;
-					yBL = 0; yBR = 1;
+				if ( (y >= 30) ) {
+					y = 0;
 					pacSignal = 0x02; break;
 				}
 				// otherwise not infinite, move right unless wall
-				if ( (LEVELSCOPY[xTR][yTR + 1] != 1) && (LEVELSCOPY[xBR][yBR + 1] != 1) ) {
-					yTL++; yTR++;
-					yBL++; yBR++;
+				if ( (LEVELSCOPY[x][y + 1] != 1) ) {
+					y++;
 					pacSignal = 0x02; break;
 				}
 			
-				if ( (LEVELSCOPY[xTR][yTR + 1] == 1) || (LEVELSCOPY[xBR][yBR + 1] == 1) ) {
+				if ( (LEVELSCOPY[x][y + 1] == 1) ) {
 					pacSignal = 0x00; break;
 				}
 				break;
 			case goUp:
 				// not infinite, move up unless wall
-				if ( (LEVELSCOPY[xTL - 1][yTL] != 1) && (LEVELSCOPY[xTR - 1][yTR] != 1) ) {
-					xTL--; xTR--;
-					xBL--; xBR--;
+				if ( (LEVELSCOPY[x - 1][y] != 1) ) {
+					x--;
 					pacSignal = 0x03; break;
 				}
 			
-				if ( (LEVELSCOPY[xTL - 1][yTL] == 1) || (LEVELSCOPY[xTR - 1][yTR] == 1) ) {
+				if ( (LEVELSCOPY[x - 1][y] == 1) ) {
 					pacSignal = 0x00; break;
 				}
 				break;
 			case goDown:
 				// not infinite, move down unless wall
-				if ( (LEVELSCOPY[xBL + 1][yBL] != 1) && (LEVELSCOPY[xBR + 1][yBR] != 1) ) {
-					xTL++; xTR++;
-					xBL++; xBR++;
+				if ( (LEVELSCOPY[x + 1][y] != 1) ) {
+					x++;
 					pacSignal = 0x04; break;
 				}
 
-				if ( (LEVELSCOPY[xBL + 1][yBL] == 1) || (LEVELSCOPY[xBR + 1][yBR] == 1) ) {
+				if ( (LEVELSCOPY[x + 1][y] == 1) ) {
 					pacSignal = 0x00; break;
 				}
 				break;
@@ -265,6 +243,193 @@ int PacMove(int state) {
 	return state;
 }
 
+// GHOST ONE
+
+enum G1States {g1right, g1left, g1up, g1down};
+unsigned char G1Signal = 0x00;
+
+// GHOST DIRECTIONS		NONE = 0x00		UP = 0x01		DOWN = 0x02		LEFT = 0x03		RIGHT = 0x04;
+
+unsigned char g1x = 7; unsigned char g1y = 14;
+unsigned char G1Flag = 1;
+unsigned char prevLocColor1 = 0;
+
+int G1(int state) {
+	if (G1Flag) {
+		g1x = 7; g1y = 14;
+		G1Signal = 0x00; prevLocColor1 = 0;
+	} else {
+		prevLocColor1 = LEVELSCOPY[g1x][g1y];
+	switch (state) {
+		case g1up:
+			if ((LEVELSCOPY[g1x - 1][g1y] != 1) && (LEVELSCOPY[g1x][g1y - 1] != 1) && (LEVELSCOPY[g1x][g1y + 1] != 1)) state = g1left;
+			else if ((LEVELSCOPY[g1x - 1][g1y] != 1) && (LEVELSCOPY[g1x][g1y - 1] != 1)) state = g1up;
+			else if ((LEVELSCOPY[g1x - 1][g1y] != 1) && (LEVELSCOPY[g1x][g1y + 1] != 1)) state = g1right;
+			else if ((LEVELSCOPY[g1x][g1y - 1] != 1) && (LEVELSCOPY[g1x][g1y + 1] != 1)) state = g1right;
+			else if (g1y > 0 && LEVELSCOPY[g1x][g1y - 1] != 1) state = g1left;
+			else if (g1y <= 0) state = g1left;
+			else if (g1y < 30 && LEVELSCOPY[g1x][g1y + 1] != 1) state = g1right;
+			else if (g1y >= 30) state = g1right;
+			else if (LEVELSCOPY[g1x - 1][g1y] != 1) state = g1up;
+			else if (LEVELSCOPY[g1x + 1][g1y] != 1) state = g1down;
+			break;
+
+		case g1down:
+			if ((LEVELSCOPY[g1x + 1][g1y] != 1) && (LEVELSCOPY[g1x][g1y - 1] != 1) && (LEVELSCOPY[g1x][g1y + 1] != 1)) state = g1down;
+			else if ((LEVELSCOPY[g1x + 1][g1y] != 1) && (LEVELSCOPY[g1x][g1y - 1] != 1)) state = g1down;
+			else if ((LEVELSCOPY[g1x + 1][g1y] != 1) && (LEVELSCOPY[g1x][g1y + 1] != 1)) state = g1right;
+			else if ((LEVELSCOPY[g1x][g1y - 1] != 1) && (LEVELSCOPY[g1x][g1y + 1] != 1)) state = g1left;
+			else if (g1y > 0 && LEVELSCOPY[g1x][g1y - 1] != 1) state = g1left;
+			else if (g1y <= 0) state = g1left;
+			else if (g1y < 30 && LEVELSCOPY[g1x][g1y + 1] != 1) state = g1right;
+			else if (g1y >= 30) state = g1right;
+			else if (LEVELSCOPY[g1x + 1][g1y] != 1) state = g1down;
+			else if (LEVELSCOPY[g1x - 1][g1y] != 1) state = g1up;
+			break;
+
+		case g1right:
+			if ((LEVELSCOPY[g1x - 1][g1y] != 1) && (LEVELSCOPY[g1x][g1y + 1] != 1) && (LEVELSCOPY[g1x + 1][g1y] != 1)) state = g1up;
+			else if ((LEVELSCOPY[g1x - 1][g1y] != 1) && (LEVELSCOPY[g1x][g1y + 1] != 1)) state = g1up;
+			else if ((LEVELSCOPY[g1x + 1][g1y] != 1) && (LEVELSCOPY[g1x][g1y + 1] != 1)) state = g1down;
+			else if ((LEVELSCOPY[g1x - 1][g1y] != 1) && (LEVELSCOPY[g1x + 1][g1y] != 1)) state = g1up;
+			else if (LEVELSCOPY[g1x + 1][g1y] != 1) state = g1down;
+			else if (g1y < 30 && LEVELSCOPY[g1x][g1y + 1] != 1) state = g1right;
+			else if (g1y >= 30) state = g1right;
+			else if (LEVELSCOPY[g1x - 1][g1y] != 1) state = g1up;
+			else if (g1y > 0 && LEVELSCOPY[g1x][g1y - 1] != 1) state = g1left;
+			else if (g1y <= 0) state = g1left;
+			break;
+
+		case g1left:
+			if ((LEVELSCOPY[g1x - 1][g1y] != 1) && (LEVELSCOPY[g1x][g1y - 1] != 1) && (LEVELSCOPY[g1x + 1][g1y] != 1)) state = g1up;
+			else if ((LEVELSCOPY[g1x - 1][g1y] != 1) && (LEVELSCOPY[g1x][g1y - 1] != 1)) state = g1left;
+			else if ((LEVELSCOPY[g1x + 1][g1y] != 1) && (LEVELSCOPY[g1x][g1y - 1] != 1)) state = g1left;
+			else if ((LEVELSCOPY[g1x - 1][g1y] != 1) && (LEVELSCOPY[g1x + 1][g1y] != 1)) state = g1down;
+			else if (LEVELSCOPY[g1x + 1][g1y] != 1) state = g1down;
+			else if (g1y > 0 && LEVELSCOPY[g1x][g1y - 1] != 1) state = g1left;
+			else if (g1y <= 0) state = g1left;
+			else if (LEVELSCOPY[g1x - 1][g1y] != 1) state = g1up;
+			else if (g1y < 30 && LEVELSCOPY[g1x][g1y + 1] != 1) state = g1right;
+			else if (g1y >= 30) state = g1right;
+			break;
+
+		default: state = g1up; break;
+	}
+
+	switch (state) {
+		case g1up:
+			g1x--; G1Signal = 0x01; break;
+		case g1down:
+			g1x++; G1Signal = 0x02; break;
+		case g1left:
+			if (g1y <= 0) { g1y = 30; G1Signal = 0x03; break;}
+			g1y--; G1Signal = 0x03; break;
+		case g1right:
+			if (g1y >= 30) { g1y = 0; G1Signal = 0x04; break;}
+			g1y++; G1Signal = 0x04; break;
+		default: break;
+	}}
+
+	return state;
+	
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/// GHOST TWO
+
+enum G2States {g2right, g2left, g2up, g2down};
+unsigned char G2Signal = 0x00;
+
+// GHOST DIRECTIONS		NONE = 0x00		UP = 0x01		DOWN = 0x02		LEFT = 0x03		RIGHT = 0x04;
+
+unsigned char g2x = 7; unsigned char g2y = 15;
+unsigned char G2Flag = 1;
+unsigned char prevLocColor2 = 0;
+
+int G2(int state) {
+	if (G2Flag) {
+		g2x = 7; g2y = 15;
+		G2Signal = 0x00; prevLocColor2 = 0;
+		} else {
+		prevLocColor2 = LEVELSCOPY[g2x][g2y];
+		switch (state) {
+			case g2up:
+			if ((LEVELSCOPY[g2x - 1][g2y] != 1) && (LEVELSCOPY[g2x][g2y - 1] != 1) && (LEVELSCOPY[g2x][g2y + 1] != 1)) state = g2right;
+			else if ((LEVELSCOPY[g2x - 1][g2y] != 1) && (LEVELSCOPY[g2x][g2y - 1] != 1)) state = g2left;
+			else if ((LEVELSCOPY[g2x - 1][g2y] != 1) && (LEVELSCOPY[g2x][g2y + 1] != 1)) state = g2up;
+			else if ((LEVELSCOPY[g2x][g2y - 1] != 1) && (LEVELSCOPY[g2x][g2y + 1] != 1)) state = g2left;
+			else if (g2y > 0 && LEVELSCOPY[g2x][g2y - 1] != 1) state = g2left;
+			else if (g2y <= 0) state = g2left;
+			else if (g2y < 30 && LEVELSCOPY[g2x][g2y + 1] != 1) state = g2right;
+			else if (g2y >= 30) state = g2right;
+			else if (LEVELSCOPY[g2x - 1][g2y] != 1) state = g2up;
+			else if (LEVELSCOPY[g2x + 1][g2y] != 1) state = g2down;
+			break;
+
+			case g2down:
+			if ((LEVELSCOPY[g2x + 1][g2y] != 1) && (LEVELSCOPY[g2x][g2y - 1] != 1) && (LEVELSCOPY[g2x][g2y + 1] != 1)) state = g2left;
+			else if ((LEVELSCOPY[g2x + 1][g2y] != 1) && (LEVELSCOPY[g2x][g2y - 1] != 1)) state = g2down;
+			else if ((LEVELSCOPY[g2x + 1][g2y] != 1) && (LEVELSCOPY[g2x][g2y + 1] != 1)) state = g2down;
+			else if ((LEVELSCOPY[g2x][g2y - 1] != 1) && (LEVELSCOPY[g2x][g2y + 1] != 1)) state = g2right;
+			else if (g2y > 0 && LEVELSCOPY[g2x][g2y - 1] != 1) state = g2left;
+			else if (g2y <= 0) state = g2left;
+			else if (g2y < 30 && LEVELSCOPY[g2x][g2y + 1] != 1) state = g2right;
+			else if (g2y >= 30) state = g2right;
+			else if (LEVELSCOPY[g2x + 1][g2y] != 1) state = g2down;
+			else if (LEVELSCOPY[g2x - 1][g2y] != 1) state = g2up;
+			break;
+
+			case g2right:
+			if ((LEVELSCOPY[g2x - 1][g2y] != 1) && (LEVELSCOPY[g2x][g2y + 1] != 1) && (LEVELSCOPY[g2x + 1][g2y] != 1)) state = g2down;
+			else if ((LEVELSCOPY[g2x - 1][g2y] != 1) && (LEVELSCOPY[g2x][g2y + 1] != 1)) state = g2up;
+			else if ((LEVELSCOPY[g2x + 1][g2y] != 1) && (LEVELSCOPY[g2x][g2y + 1] != 1)) state = g2right;
+			else if ((LEVELSCOPY[g2x - 1][g2y] != 1) && (LEVELSCOPY[g2x + 1][g2y] != 1)) state = g2up;
+			else if (LEVELSCOPY[g2x + 1][g2y] != 1) state = g2down;
+			else if (g2y < 30 && LEVELSCOPY[g2x][g2y + 1] != 1) state = g2right;
+			else if (g2y >= 30) state = g2right;
+			else if (LEVELSCOPY[g2x - 1][g2y] != 1) state = g2up;
+			else if (g2y > 0 && LEVELSCOPY[g2x][g2y - 1] != 1) state = g2left;
+			else if (g2y <= 0) state = g2left;
+			break;
+
+			case g2left:
+			if ((LEVELSCOPY[g2x - 1][g2y] != 1) && (LEVELSCOPY[g2x][g2y - 1] != 1) && (LEVELSCOPY[g2x + 1][g2y] != 1)) state = g2down;
+			else if ((LEVELSCOPY[g2x - 1][g2y] != 1) && (LEVELSCOPY[g2x][g2y - 1] != 1)) state = g2up;
+			else if ((LEVELSCOPY[g2x + 1][g2y] != 1) && (LEVELSCOPY[g2x][g2y - 1] != 1)) state = g2left;
+			else if ((LEVELSCOPY[g2x - 1][g2y] != 1) && (LEVELSCOPY[g2x + 1][g2y] != 1)) state = g2down;
+			else if (LEVELSCOPY[g2x + 1][g2y] != 1) state = g2down;
+			else if (g2y > 0 && LEVELSCOPY[g2x][g2y - 1] != 1) state = g2left;
+			else if (g2y <= 0) state = g2left;
+			else if (LEVELSCOPY[g2x - 1][g2y] != 1) state = g2up;
+			else if (g2y < 30 && LEVELSCOPY[g2x][g2y + 1] != 1) state = g2right;
+			else if (g2y >= 30) state = g2right;
+			break;
+
+			default: state = g2up; break;
+		}
+
+		switch (state) {
+			case g2up:
+			g2x--; G2Signal = 0x01; break;
+			case g2down:
+			g2x++; G2Signal = 0x02; break;
+			case g2left:
+			if (g2y <= 0) { g2y = 30; G2Signal = 0x03; break;}
+			g2y--; G2Signal = 0x03; break;
+			case g2right:
+			if (g2y >= 30) { g2y = 0; G2Signal = 0x04; break;}
+			g2y++; G2Signal = 0x04; break;
+			default: break;
+		}
+		}
+
+		return state;
+		
+	}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 // SCORE INCREMEMNTING
 
 unsigned short scoreCnt = 0;
@@ -274,22 +439,18 @@ int Score(int state) {
 	if (FLAG && resetScore) {
 		scoreCnt = 0;
 	} else {
-		if (pacSignal == 0x01 && LEVELSCOPY[xTL][yTL] == 2 && LEVELSCOPY[xBL][yBL] == 2) {
+		if (pacSignal == 0x01 && LEVELSCOPY[x][y] == 2) {
 			scoreCnt++;
-			LEVELSCOPY[xTL][yTL] = 0;
-			LEVELSCOPY[xBL][yBL] = 0;
-		} else if (pacSignal == 0x02 && LEVELSCOPY[xTR][yTR] == 2 && LEVELSCOPY[xBR][yBR] == 2) {
+			LEVELSCOPY[x][y] = 0;
+		} else if (pacSignal == 0x02 && LEVELSCOPY[x][y] == 2) {
 			scoreCnt++;
-			LEVELSCOPY[xTR][yTR] = 0;
-			LEVELSCOPY[xBR][yBR] = 0;
-		} else if (pacSignal == 0x03 && LEVELSCOPY[xTL][yTL] == 2 && LEVELSCOPY[xTR][yTR] == 2) {
+			LEVELSCOPY[x][y] = 0;
+		} else if (pacSignal == 0x03 && LEVELSCOPY[x][y] == 2) {
 			scoreCnt++;
-			LEVELSCOPY[xTL][yTL] = 0;
-			LEVELSCOPY[xTR][yTR] = 0;
-		} else if (pacSignal == 0x04 && LEVELSCOPY[xBL][yBL] == 2 && LEVELSCOPY[xBR][yBR] == 2) {
+			LEVELSCOPY[x][y] = 0;
+		} else if (pacSignal == 0x04 && LEVELSCOPY[x][y] == 2) {
 			scoreCnt++;
-			LEVELSCOPY[xBL][yBL] = 0;
-			LEVELSCOPY[xBR][yBR] = 0;
+			LEVELSCOPY[x][y] = 0;
 		}
 	}
 
@@ -322,18 +483,19 @@ int Game(int state) {
 				i = 0x0F;
 				resetScore = 0;
 				state = firstLevel;
+				setupArr(0);
 				countdown = 5;
 			}
 			
 			break;
 		case firstLevel:
-			if (D5) {
+			if (D5 || (x == g1x && y == g1y) || (x == g2x && y == g2y)) {
 				i = 0x0F;
 				state = firstLoss;
-			} else if (!D5 && (scoreCnt < 0x00B8)) {
+			} else if (!D5 && (scoreCnt < 0x0092) && !((x == g1x && y == g1y) || (x == g2x && y == g2y))) {
 				if (i > 0) i--;
 				state = firstLevel;
-			} else if (!D5 && (scoreCnt >= 0x00B8)) {
+			} else if (!D5 && (scoreCnt >= 0x0092)) {
 				i = 0x0F;
 				state = firstWin;
 			}
@@ -351,7 +513,7 @@ int Game(int state) {
 			break;
 		case firstWin:
 			if (D5 || i > 0) {
-				if (i > 0) i --;
+				if (i > 0) i--;
 				state = firstWin;
 			} else if (!D5 && i <= 0) {
 				resetScore = 1;
@@ -367,34 +529,27 @@ int Game(int state) {
 
 	switch (state) {
 		case startScreen:
-			controlSignal = 0x07; FLAG = 1;
+			controlSignal = 0x07; FLAG = 1; G1Flag = 1; G2Flag = 1;
+			
 			
 			LCD_ClearScreen(); LCD_DisplayString(1, " < START / RESET");
 			
 			break;
 		case startRelease:
-			controlSignal = 0x07; FLAG = 1;
+			controlSignal = 0x07; FLAG = 1; G1Flag = 1; G2Flag = 1;
 
 			break;
 		case firstLevel:
 			controlSignal = 0x04;
 			if (i > 0) {
-				FLAG = 1;
+				FLAG = 1; G1Flag = 1; G2Flag = 1;
 
 				LCD_ClearScreen();
 				LCD_DisplayString(1, "LEVEL 1 IN ");
+				LCD_WriteData((countdown - 1) + '0');
 				if (i % 5 == 0) countdown--;
-				LCD_WriteData(countdown + '0');
-				LCD_Cursor(17);
-				for (unsigned char x = 0; x < 7; ++x) {
-					LCD_WriteData(scoreDisplay[x]);
-				}
-				LCD_WriteData(scoreCnt / 1000 + '0');
-				LCD_WriteData((scoreCnt % 1000) / 100 + '0');
-				LCD_WriteData((scoreCnt % 100) / 10 + '0');
-				LCD_WriteData(scoreCnt % 10 + '0');
 			} else {
-				FLAG = 0;
+				FLAG = 0; G1Flag = 0; G2Flag = 0;
 				
 				LCD_ClearScreen();
 				LCD_DisplayString(1, "LEVEL 1");
@@ -410,7 +565,7 @@ int Game(int state) {
 
 			break;
 		case firstLoss:
-			controlSignal = 0x02; FLAG = 1;
+			controlSignal = 0x02; FLAG = 1; G1Flag = 1; G2Flag = 1;
 
 			LCD_ClearScreen();
 			LCD_DisplayString(1, "LEVEL 1 FAILED");
@@ -425,7 +580,7 @@ int Game(int state) {
 			
 			break;
 		case firstWin:
-			controlSignal = 0x01; FLAG = 1;
+			controlSignal = 0x01; FLAG = 1; G1Flag = 1; G2Flag = 1;
 
 			LCD_ClearScreen();
 			LCD_DisplayString(1, "LEVEL 1 COMPLETE");
@@ -446,19 +601,22 @@ int Game(int state) {
 	return state;
 }
 
-unsigned short SIGNAL = 0x00;
+unsigned long SIGNAL = 0x00;
 
 int Tinker(int state) {
 	if (USART_IsSendReady(0)) {
-		SIGNAL = ((controlSignal << 13) & 0xE000);
+		SIGNAL = (controlSignal);
+		SIGNAL = SIGNAL << 21;
+		SIGNAL |= (G1Signal << 3); //PORTB = g1y;
+		SIGNAL |= (G2Signal << 6); //PORTB = (G1Signal << 4) | G2Signal;
 		SIGNAL |= pacSignal;
-		/*if (pacSignal == 0x01) {USART_Send(0x01, 0); } //PORTB = 0x02;}
-		else if (pacSignal == 0x02) {USART_Send(0x02, 0); } //PORTB = 0x01;}
-		else if (pacSignal == 0x03) {USART_Send(0x03, 0); } //PORTB = 0x04;}
-		else if (pacSignal == 0x04) {USART_Send(0x04, 0); } //PORTB = 0x08;}*/
-		//USART_Send(SIGNAL >> 13, 0);
-		USART_Send((SIGNAL >> 8), 0);
-		USART_Send((SIGNAL & 0x00FF), 0);
+		
+		if (prevLocColor1 == 2) SIGNAL |= 0x008000; // G1 red
+		if (prevLocColor2 == 2) SIGNAL |= 0x010000;
+		
+		USART_Send((SIGNAL >> 16) & 0x00FF, 0);
+		USART_Send((SIGNAL >> 8) & 0x0000FF, 0);
+		USART_Send((SIGNAL & 0x000000FF), 0);
 		//USART_Flush(0);
 	}
 	return state;
@@ -470,9 +628,9 @@ int main() {
 	DDRD = 0xDF; PORTD = 0x20; // bit 5 as start/reset input
 							   // all else LCD
 	
-	static task joyTask, pacTask, scoreTask, gameTask, tinkTask;
-	task *tasks[] = {&joyTask, &pacTask, &scoreTask, &gameTask, &tinkTask};
-	unsigned short numTasks = 5;
+	static task joyTask, pacTask, g1Task, g2Task, scoreTask, gameTask, tinkTask;
+	task *tasks[] = {&joyTask, &pacTask, &g1Task, &g2Task, &scoreTask, &gameTask, &tinkTask};
+	unsigned short numTasks = 7;
 	
 	joyTask.state = -1; // single state function
 	joyTask.period = 1; // constantly reading input
@@ -485,9 +643,19 @@ int main() {
 	pacTask.TickFct = &PacMove;
 	
 	scoreTask.state = -1; // calculates score during each move and displays to LCD
-	scoreTask.period = 150; // must match timing of moves for correct calculations
+	scoreTask.period = 0; // must match timing of moves for correct calculations
 	scoreTask.elapsedTime = scoreTask.period;
 	scoreTask.TickFct = &Score;
+
+	g1Task.state = g1right;
+	g1Task.period = 150;
+	g1Task.elapsedTime = g1Task.period;
+	g1Task.TickFct = &G1;
+
+	g2Task.state = g2up;
+	g2Task.period = 150;
+	g2Task.elapsedTime = g2Task.period;
+	g2Task.TickFct = &G2;
 
 	gameTask.state = startScreen;
 	gameTask.period = 150;
